@@ -13,7 +13,9 @@ if ($return != 0 )
     print STDERR "ll_set_request failed Return = $return\n";
 }
 
-$job=ll_get_objs($query,LL_HISTORY_FILE,"/home/gmhk/globalhist.200210290000",$number,$err);
+$job=ll_get_objs($query,LL_HISTORY_FILE,"/home/gmhk/globalhist.200212250000",$number,$err);
+
+print "Number of Objects returned = $number\n";
 
 while ( $job)
 {

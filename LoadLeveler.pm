@@ -494,7 +494,7 @@ our @EXPORT = qw(
 	LL_MachineName
 	LL_JobGetNextStep
 );
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 sub AUTOLOAD {
     # This AUTOLOAD is used to 'autoload' constants from the constant()
@@ -567,7 +567,8 @@ LoadLeveler - Perl Access to IBM LoadLeveler API
 
   # Error API
 
-   ll_error($errObj,1 | 2 );
+  ll_error($errObj,1 | 2 );
+
   # Submit API function
 
   ($job_name,$owner,$groupname,$uid,$gid,$submit_host,$numsteps,$ref)=llsubmit($job_cmd_file,$monitor_program,$monitor_args);
@@ -596,27 +597,27 @@ LoadLeveler - Perl Access to IBM LoadLeveler API
 
   my ($version_num,$numjobs,$ref)=ll_get_jobs();
 
-  $query = ll_query(MACHINES);
-  $return=ll_set_request($query,QUERY_HOST,[ "f03n03c" ],ALL_DATA);
-  if ($return != 0 )
-  {
-      print STDERR "ll_set_request failed Return = $return\n";
-  }
-
-  $lav=ll_get_data($machine,LL_MachineLoadAverage);
-  print "LOAD AVERAGE = $lav\n";
-  @msl=ll_get_data($machine,LL_MachineStepList);
-
-  foreach $step ( @msl )
-  {
-     print "STEPS = $step\n";
-  }
-
 =head1 DESCRIPTION
 
-This module provides access to the Data Access, Query & Submit APIs of IBM LoadLeveler.  This version has only been tested with LoadLeveler 3.1.0 under AIX 5.1.
+This module provides access to the APIs of the IBM LoadLeveler Workload Management System.  The APIs currently implemented are:
 
-This module is nor for the faint hearted.  The LoadLeveler API returns a huge amount of information, the ll_get_data call has over 300 different specifications that can be supplied.  To use this module you really need a copy of the the IBM documentation on using LoadLeveler and maybe a copy of the llapi.h header file.
+=over 4
+
+=item * L<Data Access|Data Access API>
+
+=item * L<Query|Query API>
+
+=item * L<Submit|Submit API>
+
+=item * Error Handling
+
+=item * L<Workload Management (Partial)|Workload Management API>
+
+=back
+
+This version has only been tested with LoadLeveler 3.1.0 under AIX 5.1.
+
+This module is not for the faint hearted.  The LoadLeveler API returns a huge amount of information, the ll_get_data call has over 300 different specifications that can be supplied.  To use this module you really need a copy of the the IBM documentation on using LoadLeveler and maybe a copy of the llapi.h header file.
 
 =head2 Data Access API
 
@@ -624,45 +625,328 @@ The Data Access API has the following functions:
 
 =over 4
 
-=item ll_query
+=item * ll_query
 
-=item ll_set_request
+=item * ll_set_request
 
-=item ll_reset_request
+=item * ll_reset_request
 
-=item ll_get_objs
+=item * ll_get_objs
 
-=item ll_get_data
+=item * ll_get_data
 
-=item ll_next_obj
+=item * ll_next_obj
 
-=item ll_free_objs
+=item * ll_free_objs
 
-=item ll_deallocate
+=item * ll_deallocate
 
 =back
 
-For most of these functions the use is pretty much acording to the IBM documentation, the only call that is different is B<ll_get_data>, this returns data apporopriate to the request being made as the return value and not via a third parameter eg
+A minimal example of using the Data Access API is:
 
-$lav=ll_get_data($machine,LL_MachineLoadAverage);	# Returns a double
+	use LoadLeveler;
 
-@msl=ll_get_data($machine,LL_MachineStepList);		# Returns an array of strings.
+	# Query Job information
+	$query = ll_query(JOBS);
 
-To know what you are getting you really need to know about the LoadLeveler Job Object Model.  All of this is in the I<IBM IBM LoadLeveler for AIX 5L: Using and Administering> book and html. Sorry for not including it here, but there is an awful lot of it.
+	# Ask for all data on all jobs
+	$return=ll_set_request($query,QUERY_ALL,undef,ALL_DATA);
+	if ($return != 0 )
+	{
+	    print STDERR "ll_set_request failed Return = $return\n";
+	}
 
-For B<ll_set_request> the data filter parameter must be a reference to an array, ie you can say:
+	# Query the scheduler for information
+	# $number will contain the number of objects returned
 
-$return=ll_set_request($query,QUERY_HOST,[ "f03n03c", "f13n03c" ],ALL_DATA);
+	$job=ll_get_objs($query,LL_CM,NULL,$number,$err);
 
-or
+	while ( $job)
+	{
+		# Get the Job submit time
+		$SubmitTime=ll_get_data($job,LL_JobSubmitTime);
+		$job=ll_next_obj($query);
+	}
+	# Free up space allocated by LoadLeveler to hold the job object
+	ll_free_objs($job);
 
-$return=ll_set_request($query,QUERY_HOST,\@array,ALL_DATA);
+	# Free up space used by the Query Object
+	ll_deallocate($query);
 
-but not
+=over 4
 
-$return=ll_set_request($query,QUERY_HOST,@array,ALL_DATA);
+=item ll_query
 
-This is probably a bug in the module.
+	$query = ll_query( JOBS | MACHINES | CLUSTER | WLMSTAT | MATRIX );
+
+ll_query is the first call you make to access the API it establishes the type of information you receive.
+
+=item ll_set_request
+
+	$return=ll_set_request($query,$QueryFlags,$ObjectFilter, $DataFilter);
+
+ll_set_request is used to determine the range of data returned by ll_get_objs.
+
+
+B<Parameters>
+
+
+=over 4
+
+=item 1 $query
+
+The return from L<ll_query>
+
+=item 2 $QueryFlags
+
+The permissable Query Flags depends on the type of query being made.  The flags are:
+
+=over 4
+
+=item * QUERY_ALL
+: Query all jobs.
+
+=item * QUERY_JOBID
+: Query by job ID.
+
+=item * QUERY_STEPID
+: Query by step ID.
+
+=item * QUERY_USER
+: Query by user ID.
+
+=item * QUERY_GROUP
+: Query by LoadLeveler group.
+
+=item * QUERY_CLASS
+: Query by LoadLeveler class.
+
+=item * QUERY_HOST
+: Query by machine name.
+
+=item * QUERY_STARTDATE
+: Query by job start dates
+
+=item * QUERY_ENDDATE
+: Query by job end dates.
+
+=back
+
+They can be used with the following query types:
+
+=begin text
+
+	Query Type	Permitted Flags
+	-------------------------------
+	JOBS		QUERY_ALL QUERY_JOBID QUERY_STEPID QUERY_USER QUERY_GROUP QUERY_CLASS QUERY_HOST QUERY_STARTDATE QUERY_ENDDATE
+	MACHINES	QUERY_ALL QUERY_HOST
+	CLUSTER		QUERY_ALL
+	WLMSTAT		QUERY_STEPID
+	MATRIX		QUERY_ALL QUERY_HOST
+
+=end text
+
+=begin html
+<table border="1">
+<tr>
+<th>	Query Type</th><th>	Permitted Flags</th>
+</tr>
+<tr>
+<td>	JOBS</td><td>		QUERY_ALL QUERY_JOBID QUERY_STEPID QUERY_USER QUERY_GROUP QUERY_CLASS QUERY_HOST QUERY_STARTDATE QUERY_ENDDATE</td>
+</tr>
+<tr>
+<td>		MACHINES	</td><td>QUERY_ALL QUERY_HOST</td>
+</tr>
+<tr>
+<td>	CLUSTER		</td><td>QUERY_ALL</td>
+</tr>
+<tr>
+<td>	WLMSTAT		</td><td>QUERY_STEPID</td>
+</tr>
+<tr>
+<td>	MATRIX		</td><td>QUERY_ALL QUERY_HOST</td>
+</tr>
+</table>
+<br>
+
+=end html
+
+
+=item 3 $ObjectFilter
+
+
+Specifies the search criteria:
+
+=begin text
+
+	Query Flag	Filter
+	---------------------------------------
+	QUERY_ALL	undef
+	QUERY_JOBID	Array reference of job IDs eg ["host.jobid1", "host.jobid2"]
+	QUERY_STEPID	Array reference of step IDs eg ["host.jobid.stepid"]
+	QUERY_USER	Array reference of user IDs eg ["fred", "mark", "mary"]
+	QUERY_CLASS     Array reference of LoadLeveler class names.
+	QUERY_GROUP	Array reference of LoadLeveler group names.
+	QUERY_HOST	Array reference of LoadLeveler host names.
+	QUERY_STARTDATE or QUERY_ENDDATE two start dates or two end dates having the format MM/DD/YYYY eg ["01/14/2003", "02/23/2003"].
+
+=end text
+
+=begin html
+<table border="1">
+<tr>
+<th>	Query Flag</th><th>	Filter</th>
+</tr>
+<tr>
+<td>	QUERY_ALL</td><td>	undef</td>
+</tr>
+<tr>
+<td>	QUERY_JOBID</td><td>	Array reference of job IDs eg ["host.jobid1", "host.jobid2"]</td>
+</tr>
+<tr>
+<td>	QUERY_STEPID</td><td>	Array reference of step IDs eg ["host.jobid.stepid"]</td>
+</tr>
+<tr>
+<td>	QUERY_USER</td><td>	Array reference of user IDs eg ["fred", "mark", "mary"]</td>
+</tr>
+<tr>
+<td>	QUERY_CLASS</td><td>     Array reference of LoadLeveler class names.</td>
+</tr>
+<tr>
+<td>	QUERY_GROUP</td><td>	Array reference of LoadLeveler group names.</td>
+</tr>
+<tr>
+<td>	QUERY_HOST</td><td>	Array reference of LoadLeveler host names.</td>
+</tr>
+<tr>
+<td>	QUERY_STARTDATE or QUERY_ENDDATE</td><td> two start dates or two end dates having the format MM/DD/YYYY eg ["01/14/2003", "02/23/2003"].</td>
+</tr>
+</table>
+
+=end html
+
+=item 4 $DataFilter
+
+Filters the amount of data you get back from the query. Permitted values are:
+
+=over  4
+
+=item * ALL_DATA
+
+=item * Q_LINE
+
+Valid only for a JOBS query, not using the history file, returns the same data as B<llq -f>
+
+=item * STATUS_LINE
+
+Valid only for a MACHINES query, returns the same data as B<llstatus -f>
+
+=back
+
+=back
+
+=item ll_reset_request
+
+
+	$return=ll_reset_request($query);
+
+This is used to reset the request (surprise!) associated with a query object, you use it if you want to do another L<ll_set_request> using different parameters.
+
+=item ll_get_objs
+
+	$data=ll_get_objs($query,$query_daemon,$host,$number,$err);
+
+Sends a query request to LoadLeveler
+
+B<Parameters>
+
+=over 4
+
+=item 1 $query
+
+Data from ll_query
+
+=item 2 $query_daemon
+
+The LoadLeveler Daemon you want to query, permitted values are:
+
+=over 4
+
+=item * LL_STARTD
+
+=item * LL_SCHEDD
+
+=item * LL_CM (negotiator)
+
+=item * LL_MASTER
+
+=item * LL_STARTER
+
+=item * LL_HISTORY_FILE
+
+=back
+
+=item 3 $host
+
+Should be NULL unless you are querying LL_STARTD or LL_SCHED and want to query a machine other than the localhost. If you are querying LL_HISTORY_FILE then this should be the name of the history file.
+
+=item 4 $number
+
+The number of query objects returned.
+
+=item 5 $error
+
+If there is an error this is it. Possible values are:
+
+
+=over 4
+
+=item -1 query_element not valid
+
+=item -2 query_daemon not valid
+
+=item -3 Cannot resolve hostname
+
+=item -4 Request type for specified daemon not valid
+
+=item -5 System error
+
+=item -6 No valid objects meet the request
+
+=item -7 Configuration error
+
+=item -9 Connection to daemon failed
+
+=item -10 Error processing history file (LL_HISTORY_FILE query only)
+
+=item -11 History file must be specified in the hostname argument (LL_HISTORY_FILE query only)
+
+=item -12 Unable to access the history file (LL_HISTORY_FILE query only)
+
+=item -13 DCE identity of calling program can not be established
+
+=item -14 No DCE credentials
+
+=item -15 DCE credentials within 300 secs of expiration
+
+=item -16 64-bit API is not supported when DCE is enabled
+
+=back
+
+=back
+
+=item ll_get_data
+
+	$data=ll_get_data($element,$specification);
+
+This call differs from the IBM documentation, the data you request is returned as the return value and not as a third parameter eg
+
+	$lav=ll_get_data($machine,LL_MachineLoadAverage);	# Returns a double
+
+	@msl=ll_get_data($machine,LL_MachineStepList);		# Returns an array of strings.
+
+To know what you are getting you really need to know about the LoadLeveler Job Object Model.  All of this is in the I<IBM LoadLeveler for AIX 5L: Using and Administering> book and html. Sorry for not including it here, but there is an awful lot of it.
 
 
 B<enum types>
@@ -695,32 +979,119 @@ Returns from some query types may be, in C terms, enumerated types.  In perl the
 
 =back
 
-=head2 Submit API
+=item ll_next_obj
 
-The Submit API has the following function:
+	$job=ll_next_obj($query);
 
-=over 4
+This returns the next object from the query object.
 
-=item llsubmit
+=item ll_free_objs
+
+	$return=ll_free_objs($query);
+
+This frees up the the space taken by the ll_get_objs routine for the LoadLeveler Data.  Since there is probably an awful lot of this this is a very important call.
+
+=item ll_deallocate
+
+	$return=ll_deallocate($query);
+
+Frees the query object itself, this is the last LoadLeveler action.
 
 =back
 
-On successful submission this function returns a perlised version of the LL_job structure. See the llsubmit example and the LoadLeveler API header file llapi.h for information on how to use it.  Currently the following LL_job_step structure members are not returned:
+=head2 Submit API
+
+The Submit API has one function:
+
+=over 4
+
+=item * llsubmit
+
+=back
+
+On successful submission this function returns a `perlised' version of the LL_job structure. See the llsubmit example and the LoadLeveler API header file llapi.h for full information on how to use it.  Currently the following LL_job_step structure members are not returned:
 
 	usage_info64
 	adapter_req
-	
+
 llfree_job_info is not implemented because it is done by in the llsubmit call after the data has been transfered to Perl.
+
+A minimal example of using the Submit API is:
+
+	use LoadLeveler;
+
+	my ($job_name,$owner,$group,$uid,$gid,$host,$steps,$job_step)=llsubmit("/home/gmhk/test_job/test_job.cmd",NULL,NULL);
+
+	print "Job Name   = $job_name\n";
+	print "Owner      = $owner\n";
+	print "Group      = $group\n";
+	print "UID        = $uid\n";
+	print "GID        = $gid\n";
+	print "HOST       = $host\n";
+	print "STEPS      = $steps\n";
+	print "JOB_STEP   = $job_step\n";
+	@steps=@{$job_step};
+	print "JOB_STEP   = $#{$job_step}\n";
+	foreach $stepref  (@steps)
+	{
+		%step=%{$stepref};
+		print "STEP_NAME      = $step{'step_name'}\n";
+		print "REQUIREMENTS   = $step{'requirements'}\n";
+		%usage_info = %{$step{'usage_info'}};
+		print "USAGE INFO     = --------------------\n";
+		print "	STARTER_RUSAGE = $usage_info{'starter_rusage'}\n";
+		%rusage=%{$usage_info{'starter_rusage'}};
+		print "		RU_UTIME  = $rusage{'ru_utime'}\n";
+		print "		RU_MAXRSS = $rusage{'ru_maxrss'}\n";
+		print "	STEP_RUSAGE    = $usage_info{'step_rusage'}\n";
+		print "	MACH_USAGE ITEMS = $#{$usage_info{'mach_usage'}}\n";
+	}
 
 =over 4
 
 =item llsubmit
 
-On success llsubmit returns:
-
 	($job_name,$owner,$groupname,$uid,$gid,$submit_host,$numsteps,$ref)=llsubmit($job_cmd_file,$monitor_program,$monitor_args);
 
-B<$ref> is a reference to an array of job step information, each job step is a hash, the key is the name of the element in the LL_job_step structure, eg:
+B<Parameters>
+
+=over 4
+
+=item * $job_cmd_file
+
+A string containing the name of the Job Command File
+
+=item * $monitor_program
+
+Is a pointer to a string containing the name of the monitor program to be invoked when the state of the job is changed. Set to NULL if a monitoring program is not provided.
+
+=item * $monitor_args
+
+Is a pointer to a string which is stored in the job object and is passed to the monitor program. The maximum length of the string is 1023 bytes. If the length exceeds this value, it is truncated to 1023 bytes. Set to NULL if an argument is not provided.
+
+=back
+
+B<Return>
+
+=over 4
+
+=item * $job_name
+
+=item * $owner
+
+=item * $groupname
+
+=item * $uid
+
+=item * $gid
+
+=item * $submit_host
+
+=item * $numsteps
+
+=item * $ref
+
+$ref is a reference to an array of job step information, each job step is a hash, the key is the name of the element in the LL_job_step structure, eg:
 
 	@steps = @{$ref};
 	foreach $stepref ( @steps )
@@ -733,7 +1104,7 @@ B<$ref> is a reference to an array of job step information, each job step is a h
 
 =back
 
-The B<usage_info> element is a Perl version of the LL_USAGE structure, and is a horror in its own right.  For an example on how to decode this monster see the example llsubmit
+=back
 
 =head2 Query API
 
@@ -1023,6 +1394,23 @@ Standard build/installation supported by ExtUtils::MakeMaker(3)...
 To convert the pod documentation (what there is of it) to html:
 
 	make html
+
+=head1 Known Problems
+
+=head2 Large History files
+
+This module has been observed to crash when given a history file of >92MB and <132MB ( the killer value is probably 128MB ).
+
+B<Workaround>
+
+The solution is to increase the bmaxdata value of the Perl executable. If you are using the installp version of perl it is recommended to copy the executable to another directory, and modify using ldedit to increase the number of data
+segments.
+
+        cp /usr/opt/perl/bin/perl /global/bin/llperl
+        /usr/bin/ldedit -o bmaxdata:0x20000000 /global/bin/llperl
+
+Then modify any scripts that have exhibited this behaviour to use the new
+executable. If this fails then increase the bmaxdata value until successful.
 
 =head1 AUTHOR
 

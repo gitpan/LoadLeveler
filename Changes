@@ -1,5 +1,11 @@
 Revision history for Perl extension LoadLeveler.
 
+0.06  Thu Mar 06 16:16:00 2003
+	- Added Notes on Core dumps with large history files and solution 
+	  contributed by Dr Peter Mayes (peter_mayes@uk.ibm.com ) 
+	  and Mark Roberts (mark.roberts@awe.co.uk)
+	- Modified documentation
+
 0.05  Tue Jan 28 16:15:00 2003
 	- Added Workload Management API
 	- Added Data Access API test

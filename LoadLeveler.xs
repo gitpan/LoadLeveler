@@ -2879,7 +2879,7 @@ ll_get_objs(object,query_daemon,hostname,number,err)
 	PROTOTYPE: $$$$$
 	CODE:
 	{
-		RETVAL=ll_get_objs(object,query_daemon,hostname,&number,&err);
+	    RETVAL=ll_get_objs(object,query_daemon,hostname,&number,&err);
 	}
 	OUTPUT:
 		number

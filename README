@@ -1,4 +1,4 @@
-LL version 0.05
+LoadLeveler version 0.06
 ===============
 
 This module makes the IBM LoadLeveler Data Access, Query, Submit & Workload management APIs available to Perl.
@@ -21,11 +21,4 @@ This module requires IBM LoadLeveler 3.1.0 and AIX 5.1
 
   Copying
 
-    Copyright (c) 2002 Mike Hawkins. All rights reserved.
-
-  License
-
-    This software is covered by Perl's Artistic license, see the file
-    Artistic included in the distribution.
-
-
+    Copyright (c) 2002 Mike Hawkins. All rights reserved. This program is free software; you can redistribute it and/or modify it under the same terms as Perl itself. 
